@@ -10,33 +10,63 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+import sys
+import os
 warnings.filterwarnings('ignore')
 
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     classification_report, confusion_matrix,
-    roc_auc_score, roc_curve, precision_recall_curve,
+    roc_auc_score, roc_curve,
     average_precision_score, f1_score
 )
 from imblearn.over_sampling import SMOTE
 import xgboost as xgb
 import joblib
-import os
 
 
 def load_data(filepath='data/creditcard.csv'):
+    """Load the credit card transactions dataset."""
+    if not os.path.exists(filepath):
+        print("\n" + "="*60)
+        print("ERROR: Dataset file not found!")
+        print("="*60)
+        print(f"Expected file at: {os.path.abspath(filepath)}")
+        print()
+        print("The creditcard.csv file is ~150MB and cannot be stored")
+        print("in GitHub due to the 100MB file size limit.")
+        print()
+        print("To download the dataset, choose one of these options:")
+        print()
+        print("OPTION 1 - Manual Download:")
+        print("  1. Visit: https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud")
+        print("  2. Click Download (requires free Kaggle account)")
+        print("  3. Unzip and place creditcard.csv in the data/ folder")
+        print()
+        print("OPTION 2 - Kaggle API:")
+        print("  pip install kaggle")
+        print("  kaggle datasets download -d mlg-ulb/creditcardfraud -p data/ --unzip")
+        print()
+        print("See data/README.md for full instructions.")
+        print("="*60)
+        sys.exit(1)
+
     print("Loading data...")
     df = pd.read_csv(filepath)
     print(f"Dataset shape: {df.shape}")
+    print(f"Columns: {list(df.columns)}")
     return df
 
 
 def perform_eda(df):
+    """Perform exploratory data analysis and visualizations."""
     print("\n=== EDA ===")
     print(df.describe())
+    print(f"\nMissing values:\n{df.isnull().sum()}")
+
     fraud_count = df['Class'].value_counts()
     print(f"\nClass distribution:\n{fraud_count}")
     print(f"Fraud percentage: {fraud_count[1]/len(df)*100:.4f}%")
@@ -46,6 +76,8 @@ def perform_eda(df):
     plt.figure(figsize=(6, 4))
     sns.countplot(x='Class', data=df, palette=['steelblue', 'crimson'])
     plt.title('Class Distribution (0=Normal, 1=Fraud)')
+    plt.xlabel('Class')
+    plt.ylabel('Count')
     plt.savefig('plots/class_distribution.png', dpi=150, bbox_inches='tight')
     plt.close()
 
@@ -53,9 +85,11 @@ def perform_eda(df):
     plt.subplot(1, 2, 1)
     df[df['Class'] == 0]['Amount'].hist(bins=50, color='steelblue', alpha=0.7)
     plt.title('Normal Transaction Amounts')
+    plt.xlabel('Amount')
     plt.subplot(1, 2, 2)
     df[df['Class'] == 1]['Amount'].hist(bins=50, color='crimson', alpha=0.7)
     plt.title('Fraudulent Transaction Amounts')
+    plt.xlabel('Amount')
     plt.tight_layout()
     plt.savefig('plots/amount_distribution.png', dpi=150, bbox_inches='tight')
     plt.close()
@@ -63,6 +97,7 @@ def perform_eda(df):
 
 
 def preprocess(df):
+    """Scale features and handle class imbalance using SMOTE."""
     print("\n=== Preprocessing ===")
     scaler = StandardScaler()
     df['scaled_amount'] = scaler.fit_transform(df[['Amount']])
@@ -81,10 +116,13 @@ def preprocess(df):
     sm = SMOTE(random_state=42)
     X_train_res, y_train_res = sm.fit_resample(X_train, y_train)
     print(f"After SMOTE - Training set: {X_train_res.shape}")
+    print(f"Class distribution after SMOTE: {pd.Series(y_train_res).value_counts().to_dict()}")
+
     return X_train_res, X_test, y_train_res, y_test
 
 
 def train_models(X_train, y_train):
+    """Train Logistic Regression, Random Forest, and XGBoost."""
     models = {
         'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
         'Random Forest': RandomForestClassifier(
@@ -107,6 +145,7 @@ def train_models(X_train, y_train):
 
 
 def evaluate_models(models, X_test, y_test):
+    """Evaluate all models and compare performance."""
     print("\n=== Model Evaluation ===")
     results = {}
     os.makedirs('plots', exist_ok=True)
@@ -159,10 +198,12 @@ def evaluate_models(models, X_test, y_test):
     results_df = pd.DataFrame(results).T
     print(results_df)
     results_df.to_csv('model_results.csv')
+    print("Results saved to model_results.csv")
     return results
 
 
 def plot_feature_importance(models, feature_names):
+    """Plot feature importance for tree-based models."""
     os.makedirs('plots', exist_ok=True)
     for name in ['Random Forest', 'XGBoost']:
         if name in models:
@@ -178,9 +219,11 @@ def plot_feature_importance(models, feature_names):
             plt.savefig(f"plots/feature_importance_{name.replace(' ', '_')}.png",
                         dpi=150, bbox_inches='tight')
             plt.close()
+            print(f"Feature importance plot saved for {name}.")
 
 
 def save_best_model(models, results):
+    """Save the best performing model based on ROC-AUC."""
     os.makedirs('models', exist_ok=True)
     best_name = max(results, key=lambda x: results[x]['ROC-AUC'])
     joblib.dump(models[best_name], 'models/best_fraud_detector.pkl')
@@ -199,3 +242,4 @@ if __name__ == '__main__':
     plot_feature_importance(models, feature_names)
     best = save_best_model(models, results)
     print(f"\nPipeline complete! Best model: {best}")
+    print("Check the 'plots/' folder for all visualizations.")
