@@ -205,3 +205,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# ==============================================
+# Large Data Files - Do NOT commit to GitHub
+# Download from Kaggle (see data/README.md)
+# ==============================================
+data/*.csv
+data/*.zip
+
+# Trained models (too large for git)
+models/*.pkl
+models/*.joblib
+
+# Generated output
+plots/
+model_results.csv
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
